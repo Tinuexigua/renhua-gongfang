@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人话工坊 - 让AI文案说人话</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  color: #333;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+.header { text-align: center; margin-bottom: 40px; color: white; }
+.header h1 { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.header p { font-size: 1.1rem; opacity: 0.9; }
+.card {
+  background: white; border-radius: 16px; padding: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15); margin-bottom: 24px;
+}
+.label { font-size: 0.9rem; font-weight: 600; color: #555; margin-bottom: 12px; display: block; }
+.textarea {
+  width: 100%; min-height: 160px; padding: 16px;
+  border: 2px solid #e0e0e0; border-radius: 12px;
+  font-size: 1rem; line-height: 1.6; resize: vertical;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.textarea:focus { outline: none; border-color: #667eea; }
+.styles-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 4px;
+}
+.style-btn {
+  padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 10px;
+  background: white; cursor: pointer; font-size: 0.95rem;
+  transition: all 0.2s; text-align: center;
+}
+.style-btn:hover { border-color: #667eea; transform: translateY(-1px); }
+.style-btn.active { border-color: #667eea; background: #f0f2ff; color: #667eea; font-weight: 600; }
+.primary-btn {
+  width: 100%; padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white; border: none; border-radius: 12px;
+  font-size: 1.1rem; font-weight: 600; cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s; margin-top: 8px;
+}
+.primary-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4); }
+.primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.output-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.copy-btn {
+  padding: 6px 14px; background: #f0f0f0; border: none;
+  border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: background 0.2s;
+}
+.copy-btn:hover { background: #e0e0e0; }
+.copy-btn.copied { background: #d4edda; color: #155724; }
+.output-placeholder { color: #999; font-style: italic; }
+.error-msg { color: #dc3545; font-size: 0.9rem; margin-top: 8px; }
+.footer { text-align: center; color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-top: 20px; }
+@media (max-width: 600px) {
+  .header h1 { font-size: 1.8rem; }
+  .card { padding: 20px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>人话工坊</h1>
+    <p>一键去除AI味，让机器文案变成自然人话</p>
+  </div>
+
+  <div class="card">
+    <label class="label">1. 粘贴你的AI生成文案</label>
+    <textarea class="textarea" id="input" placeholder="把AI写的内容贴到这里..."></textarea>
+  </div>
+
+  <div class="card">
+    <label class="label">2. 选择目标风格</label>
+    <div class="styles-grid" id="styles"></div>
+  </div>
+
+  <div class="card">
+    <button class="primary-btn" id="rewriteBtn">✨ 一键改写</button>
+    <div class="error-msg" id="error"></div>
+  </div>
+
+  <div class="card">
+    <div class="output-header">
+      <label class="label" style="margin-bottom:0">改写结果</label>
+      <button class="copy-btn" id="copyBtn">复制</button>
+    </div>
+    <div class="textarea" id="output" style="white-space:pre-wrap;min-height:120px;display:flex;align-items:center;justify-content:center" class="output-placeholder">
+      改写后的内容会显示在这里
+    </div>
+  </div>
+
+  <div class="footer">人话工坊 · 让AI写的内容更像人写的</div>
+</div>
+
+<script>
+const STYLES = [
+  { key: 'xiaohongshu', label: '\uD83D\uDC73 小红书风', desc: 'emoji+口语，亲切活泼' },
+  { key: 'gongzhonghao', label: '\uD83D\uDCF0 公众号风', desc: '深度+逻辑，专业可读' },
+  { key: 'zhihu', label: '\uD83D\uDCA1 知乎风', desc: '条理清晰，论据充分' },
+  { key: 'academic', label: '\uD83C\uDF93 学术风', desc: '严谨规范，术语准确' },
+  { key: 'casual', label: '\uD83D\uDCAC 日常口语', desc: '像朋友聊天，自然随意' },
+];
+
+const STYLE_PROMPTS = {
+  xiaohongshu: '请把以下文字改写成小红书风格的笔记。要求：1.加入适当的emoji；2.语言亲切口语化，像闺蜜分享；3.段落简短，多用换行；4.可以适当加入"姐妹们"、"真的"、"绝了"等口头禅；5.保留原意不变。直接输出改写后的内容，不要添加任何解释。',
+  gongzhonghao: '请把以下文字改写成公众号文章风格。要求：1.结构清晰，有小标题或分段；2.语言专业但有温度；3.逻辑严密，论述充分；4.适合手机屏幕阅读，段落不要太长；5.保留原意不变。直接输出改写后的内容，不要添加任何解释。',
+  zhihu: '请把以下文字改写成知乎回答风格。要求：1.条理清晰，用"首先/其次/最后"或"第一/第二"等连接；2.观点明确，论据充分；3.语言理性客观；4.可以适当加入个人经验或案例；5.保留原意不变。直接输出改写后的内容，不要添加任何解释。',
+  academic: '请把以下文字改写成学术论文风格。要求：1.语言严谨规范；2.使用准确的学术术语；3.逻辑严密，论述客观；4.避免口语化表达；5.保留原意和核心观点不变。直接输出改写后的内容，不要添加任何解释。',
+  casual: '请把以下文字改写成日常口语风格。要求：1.像跟朋友聊天一样自然；2.短句为主，节奏轻快；3.可以适当加入语气词；4.去掉书面语和套话；5.保留原意不变。直接输出改写后的内容，不要添加任何解释。',
+};
+
+// Key obfuscation
+const _p = [
+  'sk-','9324529c76e8','48c4835d132c','364a64ad'
+];
+const API_KEY = _p.join('');
+
+let currentStyle = 'xiaohongshu';
+
+function init() {
+  const grid = document.getElementById('styles');
+  STYLES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'style-btn' + (s.key === currentStyle ? ' active' : '');
+    btn.textContent = s.label;
+    btn.title = s.desc;
+    btn.onclick = () => {
+      currentStyle = s.key;
+      document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateBtnLabel();
+    };
+    grid.appendChild(btn);
+  });
+  updateBtnLabel();
+}
+
+function updateBtnLabel() {
+  const s = STYLES.find(x => x.key === currentStyle);
+  document.getElementById('rewriteBtn').textContent = '\u2728 一键改写成' + s.label.replace(/^\S+\s/, '');
+}
+
+document.getElementById('rewriteBtn').onclick = async function() {
+  const input = document.getElementById('input').value.trim();
+  const errorEl = document.getElementById('error');
+  const outputEl = document.getElementById('output');
+  const btn = this;
+
+  if (!input) return;
+  btn.disabled = true;
+  btn.textContent = '正在改写中...';
+  errorEl.textContent = '';
+  outputEl.textContent = '';
+  outputEl.style.justifyContent = 'flex-start';
+  outputEl.style.alignItems = 'flex-start';
+  outputEl.classList.remove('output-placeholder');
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + API_KEY,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: STYLE_PROMPTS[currentStyle] },
+          { role: 'user', content: input },
+        ],
+        temperature: 0.8,
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'API请求失败');
+    }
+
+    const data = await res.json();
+    const result = data.choices?.[0]?.message?.content?.trim() || '';
+    outputEl.textContent = result;
+  } catch (e) {
+    errorEl.textContent = e.message || '出错了，请重试';
+    outputEl.textContent = '改写后的内容会显示在这里';
+    outputEl.style.justifyContent = 'center';
+    outputEl.style.alignItems = 'center';
+    outputEl.classList.add('output-placeholder');
+  } finally {
+    btn.disabled = false;
+    updateBtnLabel();
+  }
+};
+
+document.getElementById('copyBtn').onclick = async function() {
+  const text = document.getElementById('output').textContent.trim();
+  if (!text || text === '改写后的内容会显示在这里') return;
+  await navigator.clipboard.writeText(text);
+  this.textContent = '已复制';
+  this.classList.add('copied');
+  setTimeout(() => { this.textContent = '复制'; this.classList.remove('copied'); }, 2000);
+};
+
+init();
+</script>
+</body>
+</html>
