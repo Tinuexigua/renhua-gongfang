@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://tinuexigua.github.io/renhua-gongfang/sitemap.xml
